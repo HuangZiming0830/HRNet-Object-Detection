@@ -3,7 +3,7 @@ from __future__ import division
 from collections import OrderedDict
 
 import torch
-from mmcv.runner import Runner, DistSamplerSeedHook
+from mmcv.runner import Runner, DistSamplerSeedHook, EpochBasedRunner, build_optimizer
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 
 from mmdet.core import (DistOptimizerHook, DistEvalmAPHook,
@@ -56,7 +56,7 @@ def train_detector(model,
     if distributed:
         _dist_train(model, dataset, cfg, validate=validate)
     else:
-        _non_dist_train(model, dataset, cfg, validate=validate)
+        _non_dist_train(model, dataset, cfg, logger, validate=validate)
 
 
 def _dist_train(model, dataset, cfg, validate=False):
@@ -102,7 +102,7 @@ def _dist_train(model, dataset, cfg, validate=False):
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
 
 
-def _non_dist_train(model, dataset, cfg, validate=False):
+def _non_dist_train(model, dataset, cfg, logger, validate=False):
     # prepare data loaders
     data_loaders = [
         build_dataloader(
@@ -115,8 +115,10 @@ def _non_dist_train(model, dataset, cfg, validate=False):
     # put model on gpus
     model = MMDataParallel(model, device_ids=range(cfg.gpus)).cuda()
     # build runner
-    runner = Runner(model, batch_processor, cfg.optimizer, cfg.work_dir,
-                    cfg.log_level)
+#     runner = Runner(model, batch_processor, cfg.optimizer, cfg.work_dir,
+#                     cfg.log_level)
+    optimizer = build_optimizer(model, cfg.optimizer)
+    runner = EpochBasedRunner( model, batch_processor, optimizer, cfg.work_dir, logger=logger)
     runner.register_training_hooks(cfg.lr_config, cfg.optimizer_config,
                                    cfg.checkpoint_config, cfg.log_config)
 
